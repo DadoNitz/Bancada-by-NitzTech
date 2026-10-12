@@ -54,8 +54,13 @@ export default async function EstoquePage({
     listarLocais(),
     requireContext(),
   ]);
-  const itens = pagina.itens.map((unidade) => ({
+  const itens = pagina.itens.map((unidade) => {
+    const imagem = unidade.images[0] ?? unidade.product.images[0] ?? null;
+    return {
     id: unidade.id,
+    foto: imagem
+      ? `/api/imagens/${imagem.thumbnailKey ?? imagem.storageKey}`
+      : null,
     nome: unidade.product.name,
     marca: unidade.product.brand?.name ?? "Sem marca",
     codigo: unidade.internalCode,
@@ -77,7 +82,8 @@ export default async function EstoquePage({
       unidade.product.referencePriceStatus,
       unidade.product.referencePriceAt,
     ),
-  }));
+    };
+  });
   const algumBuscando = itens.some((item) => item.buscandoPreco);
   const valorPagina = itens.reduce(
     (soma, item) => soma + (item.valor ?? 0) * item.quantidade,

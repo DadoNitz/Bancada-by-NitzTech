@@ -1,9 +1,10 @@
-import { ArrowLeft, Cpu, Pencil } from "lucide-react";
+import { Cpu, Pencil } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { FotosDaPeca } from "@/components/inventory/fotos";
+import { VoltarAoEstoque } from "@/components/inventory/voltar-ao-estoque";
 import { GerarAnuncio } from "@/components/inventory/gerar-anuncio";
 import { AdicionarUnidades } from "@/components/inventory/adicionar-unidades";
 import { MovimentarUnidade } from "@/components/inventory/movimentar";
@@ -111,6 +112,15 @@ export default async function UnidadePage({
     falhas?: { fonte: string; motivo: string }[];
   } | null;
   const podeEditarPeca = can(ctx.role, "inventory:write");
+  const imagemDeCapa =
+    unidade.images.find((i) => i.isPrimary) ??
+    unidade.images[0] ??
+    unidade.product.images.find((i) => i.isPrimary) ??
+    unidade.product.images[0] ??
+    null;
+  const fotoDeCapa = imagemDeCapa
+    ? `/api/imagens/${imagemDeCapa.thumbnailKey ?? imagemDeCapa.storageKey}`
+    : null;
 
   const margem =
     unidade.estimatedSalePrice && unidade.purchaseCost
@@ -119,21 +129,24 @@ export default async function UnidadePage({
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
-      <Link
-        href="/estoque/itens"
-        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm"
-      >
-        <ArrowLeft className="size-4" aria-hidden />
-        Voltar ao estoque
-      </Link>
+      <VoltarAoEstoque />
 
       <header className="bg-card rounded-lg border p-4">
         <div className="flex items-start gap-3">
-          <div className="bg-muted flex size-12 shrink-0 items-center justify-center rounded-lg">
-            <Icone
-              nome={unidade.product.category.icon}
-              className="text-muted-foreground size-6"
-            />
+          <div className="bg-muted flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl sm:size-20">
+            {fotoDeCapa ? (
+              // eslint-disable-next-line @next/next/no-img-element -- rota privada
+              <img
+                src={fotoDeCapa}
+                alt={unidade.product.name}
+                className="size-full object-cover"
+              />
+            ) : (
+              <Icone
+                nome={unidade.product.category.icon}
+                className="text-muted-foreground size-6"
+              />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-lg font-semibold tracking-tight sm:text-xl">

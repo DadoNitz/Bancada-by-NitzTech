@@ -9,9 +9,10 @@ import {
   Trash2,
   LoaderCircle,
 } from "lucide-react";
+import gsap from "gsap";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useLayoutEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Icone } from "@/components/layout/icon";
@@ -43,12 +44,19 @@ import {
   ROTULO_CONDICAO,
 } from "@/lib/inventory-labels";
 import {
+  consumirRetornoEstoque,
+  lerRetornoEstoque,
+  salvarRetornoEstoque,
+} from "@/lib/retorno-estoque";
+import {
   removerUnidade,
   salvarResumoUnidade,
 } from "@/server/actions/edit.actions";
 
 export interface ItemEstoque {
   id: string;
+  /** Miniatura da peça (foto da unidade ou, sem ela, a do modelo). */
+  foto: string | null;
   nome: string;
   marca: string;
   codigo: string;
@@ -73,6 +81,8 @@ export function ListaEstoque({
   podeExcluir: boolean;
 }) {
   const router = useRouter();
+  const listaRef = useRef<HTMLUListElement>(null);
+  useVoltaAnimada(listaRef);
   const [selecao, setSelecao] = useState<{
     item: ItemEstoque;
     modo: "editar" | "excluir";
@@ -91,7 +101,11 @@ export function ListaEstoque({
         <span className="text-right">VALORES</span>
         <span className="text-right">AÇÕES</span>
       </div>
-      <ul className="space-y-3 lg:space-y-2" aria-label="Peças do estoque">
+      <ul
+        ref={listaRef}
+        className="space-y-3 lg:space-y-2"
+        aria-label="Peças do estoque"
+      >
         {itens.map((item) => {
           const editavel = podeEditar && item.status !== "DISCARDED";
           const href = `/estoque/itens/${item.id}`;
@@ -99,7 +113,10 @@ export function ListaEstoque({
             {
               rotulo: "Ver detalhes",
               icone: ArrowUpRight,
-              acao: () => router.push(href),
+              acao: () => {
+                salvarRetornoEstoque(item.id);
+                router.push(href);
+              },
             },
             ...(editavel
               ? [
@@ -111,7 +128,10 @@ export function ListaEstoque({
                   {
                     rotulo: "Editar ficha completa",
                     icone: ArrowUpRight,
-                    acao: () => router.push(`${href}/editar`),
+                    acao: () => {
+                      salvarRetornoEstoque(item.id);
+                      router.push(`${href}/editar`);
+                    },
                   },
                 ]
               : []),
@@ -126,17 +146,16 @@ export function ListaEstoque({
               : []),
           ];
           return (
-            <li key={item.id}>
+            <li key={item.id} data-item-id={item.id}>
               <ContextMenu.Root>
                 <ContextMenu.Trigger className="inventory-item bg-card rounded-2xl border p-4 transition-colors hover:border-primary/35 lg:px-5">
                   <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[minmax(0,1fr)_150px_170px_144px] lg:gap-4">
                     <Link
                       href={href}
+                      onClick={() => salvarRetornoEstoque(item.id)}
                       className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <span className="bg-primary/8 text-primary flex size-11 shrink-0 items-center justify-center rounded-xl">
-                        <Icone nome={item.icone} className="size-5" />
-                      </span>
+                      <Miniatura foto={item.foto} icone={item.icone} />
                       <span className="min-w-0">
                         <span
                           className="line-clamp-2 text-sm leading-5 font-semibold [overflow-wrap:anywhere] lg:line-clamp-1"
@@ -506,4 +525,125 @@ function EditorItem({
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Foto da peça no lugar do ícone da categoria. Sem foto — ou se ela falhar ao
+ * carregar — volta para o ícone, que é o que havia antes.
+ */
+function Miniatura({
+  foto,
+  icone,
+}: {
+  foto: string | null;
+  icone: string | null;
+}) {
+  const [estado, setEstado] = useState<"carregando" | "ok" | "erro">(
+    "carregando",
+  );
+  const mostrarFoto = foto && estado !== "erro";
+  return (
+    <span className="bg-primary/8 text-primary relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl lg:size-12">
+      {mostrarFoto ? (
+        // A rota de imagens é privada (exige sessão): o otimizador do Next não a alcança.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={foto}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setEstado("ok")}
+          onError={() => setEstado("erro")}
+          className={`size-full object-cover transition-opacity duration-300 ${
+            estado === "ok" ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      ) : (
+        <Icone nome={icone} className="size-5" />
+      )}
+      {mostrarFoto && estado === "carregando" ? (
+        <span className="bg-muted absolute inset-0 animate-pulse" aria-hidden />
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * Na volta de uma peça, reabre a lista onde se estava: mesma rolagem, e uma
+ * animação curta — os cartões assentam de baixo para cima e a peça de onde se
+ * veio acende com o LED da marca, para o olho achar o lugar na hora.
+ */
+function useVoltaAnimada(listaRef: React.RefObject<HTMLUListElement | null>) {
+  // Lido uma vez só: no modo estrito o efeito roda duas vezes, e a segunda
+  // leitura já encontraria a volta consumida.
+  const retornoRef = useRef<ReturnType<typeof lerRetornoEstoque> | undefined>(
+    undefined,
+  );
+  useLayoutEffect(() => {
+    if (retornoRef.current === undefined) {
+      retornoRef.current = lerRetornoEstoque();
+      consumirRetornoEstoque();
+    }
+    const retorno = retornoRef.current;
+    const lista = listaRef.current;
+    if (!retorno?.itemId || !lista) return;
+    if (retorno.busca !== window.location.search) return;
+
+    // O Next rola para o topo depois de navegar; restaura agora e de novo no
+    // próximo quadro, para vencer essa rolagem.
+    const restaurar = () =>
+      window.scrollTo({ top: retorno.scrollY, behavior: "instant" });
+    restaurar();
+    const quadro = requestAnimationFrame(restaurar);
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return () => cancelAnimationFrame(quadro);
+    }
+
+    const cartoes = Array.from(lista.children) as HTMLElement[];
+    const alvo = lista.querySelector<HTMLElement>(
+      `[data-item-id="${CSS.escape(retorno.itemId)}"]`,
+    );
+    const indiceAlvo = alvo ? cartoes.indexOf(alvo) : 0;
+    const ctx = gsap.context(() => {
+      // Só os cartões perto da tela animam; os de longe já estão no lugar.
+      const visiveis = cartoes.filter(
+        (_, i) => Math.abs(i - indiceAlvo) <= 6,
+      );
+      gsap.from(visiveis, {
+        y: 18,
+        opacity: 0,
+        duration: 0.45,
+        ease: "power3.out",
+        stagger: { each: 0.035, from: Math.max(0, visiveis.indexOf(alvo!)) },
+        clearProps: "transform,opacity",
+      });
+      const cartao = alvo?.querySelector<HTMLElement>(".inventory-item");
+      if (cartao) {
+        gsap
+          .timeline({ delay: 0.15 })
+          .fromTo(
+            cartao,
+            { scale: 0.97, boxShadow: "0 0 0 0px var(--led)" },
+            {
+              scale: 1,
+              boxShadow: "0 0 0 3px var(--led)",
+              duration: 0.35,
+              ease: "back.out(2)",
+            },
+          )
+          .to(cartao, {
+            boxShadow: "0 0 0 0px var(--led)",
+            duration: 0.9,
+            delay: 0.5,
+            ease: "power2.inOut",
+            clearProps: "boxShadow,transform",
+          });
+      }
+    }, lista);
+    return () => {
+      cancelAnimationFrame(quadro);
+      ctx.revert();
+    };
+  }, [listaRef]);
 }

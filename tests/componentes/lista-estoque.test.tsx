@@ -32,6 +32,7 @@ vi.mock("@/server/actions/reference-price.actions", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 const item: ItemEstoque = {
   id: "peca-1",
+  foto: null,
   nome: "Memória DDR4",
   marca: "Kingston",
   codigo: "RAM-001",

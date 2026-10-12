@@ -20,6 +20,7 @@ import {
   salvarUnidade,
 } from "@/server/actions/edit.actions";
 import { cn } from "@/lib/utils";
+import { hrefDoEstoque } from "@/lib/retorno-estoque";
 
 interface Opcao {
   id: string;
@@ -162,7 +163,7 @@ export function FormularioDeEdicao({
       }
 
       toast.success("Peça excluída do estoque");
-      router.push("/estoque/itens");
+      router.push(hrefDoEstoque());
     });
   }
 

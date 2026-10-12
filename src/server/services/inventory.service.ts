@@ -29,6 +29,13 @@ const SELECAO_DA_LISTA = {
   entryDate: true,
   createdAt: true,
   location: { select: { id: true, name: true } },
+  // Foto da própria unidade vem antes da foto de catálogo do modelo: é ela que
+  // mostra a peça que está na prateleira. Só a miniatura, uma por linha.
+  images: {
+    orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
+    take: 1,
+    select: { thumbnailKey: true, storageKey: true },
+  },
   product: {
     select: {
       id: true,
@@ -45,7 +52,7 @@ const SELECAO_DA_LISTA = {
       images: {
         // Só a miniatura da foto principal. Carregar a imagem em resolução
         // máxima numa lista de 30 itens é o erro que a seção 33 proíbe.
-        where: { isPrimary: true },
+        orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
         take: 1,
         select: { thumbnailKey: true, storageKey: true },
       },
