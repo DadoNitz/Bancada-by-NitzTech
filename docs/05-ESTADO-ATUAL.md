@@ -1,6 +1,6 @@
 # Estado Atual do Sistema
 
-Produção: **https://estoque-hardware.vercel.app**
+Produção: **https://bancada.cloud**
 
 Todas as cinco fases do roadmap têm implementação funcionando. Este documento
 registra o que existe, o que ficou de fora e por quê.

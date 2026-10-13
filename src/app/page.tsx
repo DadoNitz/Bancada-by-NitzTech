@@ -393,7 +393,7 @@ export default async function Home() {
           <span className="maker">
             um produto <strong>NitzTech</strong>
           </span>
-          <span className="mono">estoque-hardware.vercel.app</span>
+          <span className="mono">bancada.cloud</span>
         </div>
       </footer>
 
