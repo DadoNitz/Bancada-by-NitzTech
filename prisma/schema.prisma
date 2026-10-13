@@ -344,6 +344,9 @@ model InventoryUnit {
   quantity   Int    @default(1)
 
   purchaseCost        Decimal?  @db.Decimal(12, 2)
+  /// Anotação no lugar do custo ("não lembro", "veio no lote"). Só existe
+  /// quando purchaseCost é nulo — ver src/lib/custo.ts.
+  purchaseCostNote    String?
   estimatedSalePrice  Decimal?  @db.Decimal(12, 2)
   purchaseDate        DateTime?
   entryDate           DateTime  @default(now())

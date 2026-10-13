@@ -8,6 +8,7 @@ import {
   atualizarProduto,
   atualizarUnidade,
   atualizarResumoDaUnidade,
+  atualizarVenda,
   excluirUnidade,
 } from "@/server/services/unit-write.service";
 
@@ -49,6 +50,7 @@ export async function salvarResumoUnidade(
         id: z.string().min(1),
         condition: z.enum(UnitCondition),
         purchaseCost: z.number().finite().min(0).max(999999999).nullable(),
+        purchaseCostNote: z.string().trim().max(80).nullable().default(null),
         estimatedSalePrice: z
           .number()
           .finite()
@@ -85,6 +87,7 @@ export async function salvarUnidade(
         condition: z.enum(UnitCondition),
         purchasedById: z.string().optional(),
         purchaseCost: dinheiro,
+        purchaseCostNote: texto(80),
         estimatedSalePrice: dinheiro,
         origin: texto(160),
         notes: texto(2000),
@@ -97,6 +100,7 @@ export async function salvarUnidade(
             condition: dados.condition,
             purchasedById: dados.purchasedById || undefined,
             purchaseCost: dados.purchaseCost,
+            purchaseCostNote: dados.purchaseCostNote,
             estimatedSalePrice: dados.estimatedSalePrice,
             origin: dados.origin,
             notes: dados.notes,
@@ -180,6 +184,37 @@ export async function removerUnidade(
   if (resultado.ok) {
     revalidatePath("/estoque/itens");
     revalidatePath("/dashboard");
+  }
+  return resultado;
+}
+
+export async function salvarVenda(
+  input: unknown,
+): Promise<ActionResult<null>> {
+  const resultado = await runAction(
+    {
+      permission: "inventory:write",
+      schema: z.object({
+        id: z.string().min(1),
+        soldPrice: z.number().finite().min(0).max(999999999).nullable(),
+        soldToName: z.string().trim().max(120).nullable(),
+      }),
+      async handler({ id, soldPrice, soldToName }, ctx) {
+        await atualizarVenda(
+          id,
+          { soldPrice, soldToName: soldToName || null },
+          ctx,
+        );
+        revalidatePath(`/estoque/itens/${id}`);
+        return null;
+      },
+    },
+    input,
+  );
+  if (resultado.ok) {
+    revalidatePath("/estoque/vendas");
+    revalidatePath("/dashboard");
+    revalidatePath("/relatorios");
   }
   return resultado;
 }

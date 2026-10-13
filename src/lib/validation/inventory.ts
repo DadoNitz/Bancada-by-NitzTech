@@ -111,6 +111,8 @@ const unidadeBase = z.object({
    */
   purchasedById: z.string().optional(),
   purchaseCost: dinheiroOpcional,
+  /** Anotação no lugar do custo ("não lembro"). Ver src/lib/custo.ts. */
+  purchaseCostNote: textoOpcional(80),
   estimatedSalePrice: dinheiroOpcional,
   purchaseDate: dataOpcional,
   origin: textoOpcional(160),
@@ -159,6 +161,9 @@ export const movimentacaoSchema = z
     reason: textoOpcional(200),
     notes: textoOpcional(1000),
     toLocationId: z.string().optional(),
+    /** Só em SALE: por quanto vendeu e para quem. Alimentam a aba de Vendas. */
+    soldPrice: dinheiroOpcional,
+    soldToName: textoOpcional(120),
   })
   .refine(
     (dados) => dados.type !== MovementType.TRANSFER || Boolean(dados.toLocationId),

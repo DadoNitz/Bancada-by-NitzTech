@@ -40,6 +40,9 @@ export interface RegistrarMovimentoInput {
   /** Obrigatório em TRANSFER. */
   toLocationId?: string | null;
   buildId?: string | null;
+  /** Só em SALE. */
+  soldPrice?: number | null;
+  soldToName?: string | null;
 }
 
 export async function registrarMovimento(
@@ -114,6 +117,18 @@ export async function registrarMovimento(
         status: transicao.novoStatus,
         quantity: saldo.novoSaldo,
         locationId: novoLocationId,
+        // Venda grava preço, data e comprador; devolução de peça vendida
+        // apaga os três, senão a aba de Vendas e os relatórios contariam
+        // uma venda que foi desfeita.
+        ...(input.type === "SALE"
+          ? {
+              soldPrice: input.soldPrice ?? null,
+              soldAt: new Date(),
+              soldToName: input.soldToName ?? null,
+            }
+          : unidade.status === "SOLD"
+            ? { soldPrice: null, soldAt: null, soldToName: null }
+            : {}),
       },
     });
 
@@ -147,7 +162,13 @@ export async function registrarMovimento(
         entity: "InventoryUnit",
         entityId: unidade.id,
         before: { status: unidade.status, quantity: unidade.quantity },
-        after: { status: transicao.novoStatus, quantity: saldo.novoSaldo },
+        after: {
+          status: transicao.novoStatus,
+          quantity: saldo.novoSaldo,
+          ...(input.type === "SALE"
+            ? { soldPrice: input.soldPrice ?? null, soldToName: input.soldToName ?? null }
+            : {}),
+        },
       },
       ctx,
       tx,

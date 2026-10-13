@@ -25,6 +25,7 @@ const SELECAO_DA_LISTA = {
   status: true,
   quantity: true,
   purchaseCost: true,
+  purchaseCostNote: true,
   estimatedSalePrice: true,
   entryDate: true,
   createdAt: true,
@@ -105,7 +106,10 @@ function montarWhere(filtro: FiltroEstoque): Prisma.InventoryUnitWhereInput {
   const produto: Prisma.ProductWhereInput = {};
 
   if (filtro.q) where.OR = clausulaDeBusca(filtro.q);
-  if (filtro.status?.length) where.status = { in: filtro.status };
+  // Peça vendida não é mais estoque: mora na aba de Vendas (listarVendas).
+  where.status = filtro.status?.length
+    ? { in: filtro.status.filter((status) => status !== "SOLD") }
+    : { not: "SOLD" };
   if (filtro.condition?.length) where.condition = { in: filtro.condition };
   if (filtro.locationId) where.locationId = filtro.locationId;
 
@@ -274,4 +278,73 @@ export async function serialJaCadastrado(
     },
     select: { id: true, internalCode: true },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Vendas
+// ---------------------------------------------------------------------------
+
+/**
+ * Peças vendidas. Saem da listagem do Estoque (ver `montarWhere`) e vivem
+ * aqui, com o que interessa depois da venda: por quanto, quando, para quem e
+ * quanto sobrou.
+ */
+export async function listarVendas(filtro: {
+  q?: string | undefined;
+  cursor?: string | undefined;
+  limite?: number;
+}) {
+  const limite = filtro.limite ?? 30;
+  const where: Prisma.InventoryUnitWhereInput = { status: "SOLD" };
+  if (filtro.q) where.OR = clausulaDeBusca(filtro.q);
+
+  const [linhas, total, somaVendidas, somaComCusto] = await Promise.all([
+    prisma.inventoryUnit.findMany({
+      where,
+      select: {
+        ...SELECAO_DA_LISTA,
+        soldPrice: true,
+        soldAt: true,
+        soldToName: true,
+      },
+      orderBy: [
+        { soldAt: { sort: "desc", nulls: "last" } },
+        { updatedAt: "desc" },
+        { id: "desc" },
+      ],
+      take: limite + 1,
+      ...(filtro.cursor ? { cursor: { id: filtro.cursor }, skip: 1 } : {}),
+    }),
+    prisma.inventoryUnit.count({ where }),
+    prisma.inventoryUnit.aggregate({
+      where,
+      _sum: { soldPrice: true },
+      _count: { soldPrice: true },
+    }),
+    // Lucro só é honesto onde há os dois números: venda e custo.
+    prisma.inventoryUnit.aggregate({
+      where: {
+        ...where,
+        soldPrice: { not: null },
+        purchaseCost: { not: null },
+      },
+      _sum: { soldPrice: true, purchaseCost: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const temMais = linhas.length > limite;
+  const itens = temMais ? linhas.slice(0, limite) : linhas;
+
+  return {
+    itens,
+    proximoCursor: temMais ? (itens.at(-1)?.id ?? null) : null,
+    total,
+    faturamento: Number(somaVendidas._sum.soldPrice ?? 0),
+    comValor: somaVendidas._count.soldPrice,
+    lucro:
+      Number(somaComCusto._sum.soldPrice ?? 0) -
+      Number(somaComCusto._sum.purchaseCost ?? 0),
+    comLucro: somaComCusto._count._all,
+  };
 }

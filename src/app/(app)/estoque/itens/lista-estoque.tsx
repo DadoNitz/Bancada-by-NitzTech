@@ -12,6 +12,7 @@ import {
 import gsap from "gsap";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { custoParaCampo, lerCusto } from "@/lib/custo";
 import { useLayoutEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -66,6 +67,8 @@ export interface ItemEstoque {
   status: UnitStatus;
   quantidade: number;
   custo: number | null;
+  /** Anotação no lugar do custo ("não lembro"). */
+  custoNota: string | null;
   valor: number | null;
   referencia: ReferenciaDeMercado;
   buscandoPreco: boolean;
@@ -195,8 +198,8 @@ export function ListaEstoque({
                           : ""}
                       </span>
                       {item.custo === null ? (
-                        <span className="text-muted-foreground block py-1 text-base italic lg:text-sm">
-                          não informado
+                        <span className="text-muted-foreground block py-1 text-base break-words italic lg:text-sm">
+                          {item.custoNota ?? "não informado"}
                         </span>
                       ) : (
                         <span className="block py-1 font-mono text-xl font-semibold tracking-tight tabular-nums lg:text-base">
@@ -354,9 +357,14 @@ function EditorItem({
       return texto === "" ? null : Number(texto.replace(",", "."));
     };
     setErro(null);
+    const custo = lerCusto(String(dados.get("custo") ?? ""));
+    if (!apagando && !custo.ok) {
+      setErro(custo.erro);
+      return;
+    }
     if (
       !apagando &&
-      [numero("custo"), numero("valor")].some(
+      [numero("valor")].some(
         (valor) =>
           valor !== null &&
           (!Number.isFinite(valor) || valor < 0 || valor > 999999999),
@@ -377,7 +385,8 @@ function EditorItem({
           : await salvarResumoUnidade({
               id: item.id,
               condition: dados.get("condition"),
-              purchaseCost: numero("custo"),
+              purchaseCost: custo.ok ? custo.valor : null,
+              purchaseCostNote: custo.ok ? custo.nota : null,
               estimatedSalePrice: numero("valor"),
             });
         if (!resultado.ok) {
@@ -439,11 +448,9 @@ function EditorItem({
                   <Input
                     id="custo-rapido"
                     name="custo"
-                    inputMode="decimal"
-                    defaultValue={
-                      item.custo?.toFixed(2).replace(".", ",") ?? ""
-                    }
-                    placeholder="0,00"
+                    maxLength={80}
+                    defaultValue={custoParaCampo(item.custo, item.custoNota)}
+                    placeholder="0,00 ou não lembro"
                     disabled={pendente}
                   />
                 </div>
@@ -531,7 +538,7 @@ function EditorItem({
  * Foto da peça no lugar do ícone da categoria. Sem foto — ou se ela falhar ao
  * carregar — volta para o ícone, que é o que havia antes.
  */
-function Miniatura({
+export function Miniatura({
   foto,
   icone,
 }: {

@@ -1,5 +1,6 @@
 "use client";
 
+import { lerCusto } from "@/lib/custo";
 import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, useTransition } from "react";
@@ -246,6 +247,12 @@ export function FormularioDeCadastro({
       return;
     }
 
+    const custoLido = lerCusto(custo);
+    if (!custoLido.ok) {
+      toast.error("Confira o custo", { description: custoLido.erro });
+      return;
+    }
+
     iniciarEnvio(async () => {
       const especificacoes: Record<string, unknown> = {};
       for (const [chave, valor] of Object.entries(specs)) {
@@ -270,7 +277,8 @@ export function FormularioDeCadastro({
           condition: condicao,
           locationId: locationId || undefined,
           purchasedById: purchasedById || undefined,
-          purchaseCost: custo || undefined,
+          purchaseCost: custoLido.valor ?? undefined,
+          purchaseCostNote: custoLido.nota ?? undefined,
           estimatedSalePrice: venda || undefined,
           origin: origem,
           notes: observacoes,
@@ -636,11 +644,11 @@ export function FormularioDeCadastro({
                 <Label htmlFor="custo">Quanto pagou (por unidade)</Label>
                 <Input
                   id="custo"
-                  inputMode="decimal"
                   className="h-11"
+                  maxLength={80}
                   value={custo}
                   onChange={(e) => setCusto(e.target.value)}
-                  placeholder="0,00"
+                  placeholder="0,00 ou não lembro"
                 />
               </div>
 

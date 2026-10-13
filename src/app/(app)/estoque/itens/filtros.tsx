@@ -18,7 +18,7 @@ import {
   CONDICOES_SELECIONAVEIS,
   ROTULO_CONDICAO,
   ROTULO_STATUS,
-  STATUS_SELECIONAVEIS,
+  STATUS_DO_ESTOQUE,
 } from "@/lib/inventory-labels";
 import { cn } from "@/lib/utils";
 
@@ -118,7 +118,7 @@ function BarraFiltros({
                       Situação
                     </legend>
                     <div className="flex flex-wrap gap-2">
-                      {STATUS_SELECIONAVEIS.map((valor) => (
+                      {STATUS_DO_ESTOQUE.map((valor) => (
                         <label
                           key={valor}
                           className="has-checked:border-primary has-checked:bg-primary/8 has-checked:text-primary flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm"
@@ -267,7 +267,7 @@ function BarraFiltros({
       >
         {[
           { valor: "", rotulo: "Todas" },
-          ...STATUS_SELECIONAVEIS.map((valor) => ({
+          ...STATUS_DO_ESTOQUE.map((valor) => ({
             valor,
             rotulo: ROTULO_STATUS[valor],
           })),

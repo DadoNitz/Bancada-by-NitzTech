@@ -69,6 +69,7 @@ export function MovimentarUnidade({
   porQuantidade,
   saldoAtual,
   locais,
+  valorSugerido,
 }: {
   unitId: string;
   statusAtual: UnitStatus;
@@ -76,6 +77,8 @@ export function MovimentarUnidade({
   porQuantidade: boolean;
   saldoAtual: number;
   locais: Local[];
+  /** Venda estimada da peça, para já vir preenchida no valor da venda. */
+  valorSugerido?: number | null;
 }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
@@ -84,6 +87,10 @@ export function MovimentarUnidade({
   const [motivo, setMotivo] = useState("");
   const [observacao, setObservacao] = useState("");
   const [destino, setDestino] = useState("");
+  const [valorVenda, setValorVenda] = useState(
+    valorSugerido ? valorSugerido.toFixed(2).replace(".", ",") : "",
+  );
+  const [comprador, setComprador] = useState("");
   const [executando, iniciar] = useTransition();
   const { online } = useOnlineStatus();
 
@@ -117,6 +124,12 @@ export function MovimentarUnidade({
         reason: motivo || undefined,
         notes: observacao || undefined,
         toLocationId: destino || undefined,
+        ...(tipo === "SALE"
+          ? {
+              soldPrice: valorVenda.trim() || undefined,
+              soldToName: comprador.trim() || undefined,
+            }
+          : {}),
       });
 
       if (!resultado.ok) {
@@ -207,6 +220,33 @@ export function MovimentarUnidade({
               <p className="text-muted-foreground text-xs">
                 Saldo atual: {saldoAtual}.
               </p>
+            </div>
+          ) : null}
+
+          {tipo === "SALE" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="mov-valor-venda">Vendeu por (R$)</Label>
+                <Input
+                  id="mov-valor-venda"
+                  inputMode="decimal"
+                  className="h-11"
+                  value={valorVenda}
+                  onChange={(evento) => setValorVenda(evento.target.value)}
+                  placeholder="0,00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="mov-comprador">Para quem</Label>
+                <Input
+                  id="mov-comprador"
+                  className="h-11"
+                  maxLength={120}
+                  value={comprador}
+                  onChange={(evento) => setComprador(evento.target.value)}
+                  placeholder="Opcional"
+                />
+              </div>
             </div>
           ) : null}
 

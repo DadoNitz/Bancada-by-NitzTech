@@ -63,6 +63,7 @@ export async function cadastrarPeca(
             locationId: dados.unidades.locationId || undefined,
             purchasedById: dados.unidades.purchasedById || undefined,
             purchaseCost: dados.unidades.purchaseCost,
+            purchaseCostNote: dados.unidades.purchaseCostNote,
             estimatedSalePrice: dados.unidades.estimatedSalePrice,
             purchaseDate: dados.unidades.purchaseDate,
             origin: dados.unidades.origin,
@@ -114,6 +115,7 @@ export async function adicionarUnidadesAoProduto(
             locationId: dados.locationId || undefined,
             purchasedById: dados.purchasedById || undefined,
             purchaseCost: dados.purchaseCost,
+            purchaseCostNote: dados.purchaseCostNote,
             estimatedSalePrice: dados.estimatedSalePrice,
             purchaseDate: dados.purchaseDate,
             origin: dados.origin,
@@ -151,6 +153,8 @@ export async function movimentar(
             reason: dados.reason ?? null,
             notes: dados.notes ?? null,
             toLocationId: dados.toLocationId || null,
+            soldPrice: dados.type === "SALE" ? (dados.soldPrice ?? null) : null,
+            soldToName: dados.type === "SALE" ? (dados.soldToName ?? null) : null,
           },
           ctx,
         );
@@ -161,6 +165,7 @@ export async function movimentar(
 
   if (resultado.ok) {
     revalidatePath("/estoque/itens");
+    revalidatePath("/estoque/vendas");
     revalidatePath("/dashboard");
     return { ok: true, data: { movimentoId: resultado.data.id } };
   }

@@ -231,6 +231,11 @@ export default async function UnidadePage({
                 nomeDaPeca={`${unidade.product.name} (${unidade.internalCode})`}
                 porQuantidade={unidade.product.trackingMode === "QUANTITY"}
                 saldoAtual={unidade.quantity}
+                valorSugerido={
+                  unidade.estimatedSalePrice === null
+                    ? null
+                    : Number(unidade.estimatedSalePrice)
+                }
                 locais={locais.map((local) => ({
                   id: local.id,
                   name: local.name,
@@ -303,7 +308,13 @@ export default async function UnidadePage({
               )}
             </Linha>
             <Linha rotulo="Valor de compra">
-              {formatarMoeda(unidade.purchaseCost)}
+              {unidade.purchaseCost === null && unidade.purchaseCostNote ? (
+                <span className="text-muted-foreground italic">
+                  {unidade.purchaseCostNote}
+                </span>
+              ) : (
+                formatarMoeda(unidade.purchaseCost)
+              )}
             </Linha>
             <Linha rotulo="Valor estimado de venda">
               {formatarMoeda(unidade.estimatedSalePrice)}

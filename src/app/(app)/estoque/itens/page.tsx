@@ -70,6 +70,7 @@ export default async function EstoquePage({
     status: unidade.status,
     quantidade: unidade.quantity,
     custo: paraNumero(unidade.purchaseCost),
+    custoNota: unidade.purchaseCostNote,
     valor: paraNumero(unidade.estimatedSalePrice),
     referencia: {
       valor: paraNumero(unidade.product.referencePrice),

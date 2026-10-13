@@ -34,6 +34,7 @@ export interface DadosDeEdicaoDaUnidade {
   locationId?: string | undefined;
   purchasedById?: string | undefined;
   purchaseCost?: number | undefined;
+  purchaseCostNote?: string | undefined;
   estimatedSalePrice?: number | undefined;
   purchaseDate?: Date | undefined;
   origin?: string | undefined;
@@ -46,6 +47,7 @@ export async function atualizarResumoDaUnidade(
   dados: {
     condition: UnitCondition;
     purchaseCost: number | null;
+    purchaseCostNote: string | null;
     estimatedSalePrice: number | null;
   },
   ctx: ActionContext,
@@ -63,7 +65,14 @@ export async function atualizarResumoDaUnidade(
   if (atual.status === "DISCARDED") {
     throw new EstoqueInvalidoError("Uma peça descartada não pode ser editada.");
   }
-  await prisma.inventoryUnit.update({ where: { id }, data: dados });
+  await prisma.inventoryUnit.update({
+    where: { id },
+    // Valor informado apaga a anotação: os dois nunca coexistem.
+    data: {
+      ...dados,
+      purchaseCostNote: dados.purchaseCost === null ? dados.purchaseCostNote : null,
+    },
+  });
   await registrarAuditoria(
     {
       action: "update",
@@ -139,6 +148,8 @@ export async function atualizarUnidade(
       condition: dados.condition,
       purchasedById: dados.purchasedById ?? null,
       purchaseCost: dados.purchaseCost ?? null,
+      purchaseCostNote:
+        dados.purchaseCost === undefined ? (dados.purchaseCostNote ?? null) : null,
       estimatedSalePrice: dados.estimatedSalePrice ?? null,
       purchaseDate: dados.purchaseDate ?? null,
       origin: dados.origin ?? null,
@@ -315,6 +326,43 @@ export async function excluirUnidade(
       entityId: id,
       before: { internalCode: unidade.internalCode },
       after: { motivo: motivo ?? null },
+    },
+    ctx,
+  );
+}
+
+/** Ajusta preço e comprador de uma peça que já está vendida. */
+export async function atualizarVenda(
+  id: string,
+  dados: { soldPrice: number | null; soldToName: string | null },
+  ctx: ActionContext,
+): Promise<void> {
+  const atual = await prisma.inventoryUnit.findUnique({
+    where: { id },
+    select: { status: true, soldPrice: true, soldToName: true, soldAt: true },
+  });
+  if (!atual) throw new NaoEncontradoError("Unidade de estoque");
+  if (atual.status !== "SOLD") {
+    throw new EstoqueInvalidoError(
+      "Só dá para editar a venda de uma peça vendida. Registre a venda pelo botão Movimentar.",
+    );
+  }
+  await prisma.inventoryUnit.update({
+    where: { id },
+    // Venda antiga, marcada antes de existir este campo, ganha a data de hoje
+    // só se ainda não tinha nenhuma.
+    data: { ...dados, soldAt: atual.soldAt ?? new Date() },
+  });
+  await registrarAuditoria(
+    {
+      action: "update",
+      entity: "InventoryUnit",
+      entityId: id,
+      before: {
+        soldPrice: atual.soldPrice === null ? null : Number(atual.soldPrice),
+        soldToName: atual.soldToName,
+      },
+      after: dados,
     },
     ctx,
   );

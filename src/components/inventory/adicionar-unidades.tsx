@@ -1,5 +1,6 @@
 "use client";
 
+import { lerCusto } from "@/lib/custo";
 import { CopyPlus, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -85,6 +86,12 @@ export function AdicionarUnidades({
       return;
     }
 
+    const custoLido = lerCusto(custo);
+    if (!custoLido.ok) {
+      toast.error("Confira o custo", { description: custoLido.erro });
+      return;
+    }
+
     iniciar(async () => {
       const resultado = await adicionarUnidadesAoProduto({
         productId,
@@ -93,7 +100,8 @@ export function AdicionarUnidades({
         condition: condicao,
         locationId: locationId || undefined,
         purchasedById: purchasedById || undefined,
-        purchaseCost: custo || undefined,
+        purchaseCost: custoLido.valor ?? undefined,
+        purchaseCostNote: custoLido.nota ?? undefined,
         origin: origem,
       });
 
@@ -242,11 +250,11 @@ export function AdicionarUnidades({
               <Label htmlFor="add-custo">Valor pago por unidade</Label>
               <Input
                 id="add-custo"
-                inputMode="decimal"
                 className="h-11"
+                maxLength={80}
                 value={custo}
                 onChange={(evento) => setCusto(evento.target.value)}
-                placeholder="0,00"
+                placeholder="0,00 ou não lembro"
               />
             </div>
 

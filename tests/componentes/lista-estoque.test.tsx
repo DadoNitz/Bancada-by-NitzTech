@@ -42,6 +42,7 @@ const item: ItemEstoque = {
   status: "AVAILABLE",
   quantidade: 1,
   custo: 80,
+  custoNota: null,
   valor: 125,
   referencia: {
     valor: 110,
@@ -126,6 +127,7 @@ describe("ações da lista de estoque", () => {
         id: "peca-1",
         condition: "LIKE_NEW",
         purchaseCost: 80,
+      purchaseCostNote: null,
         estimatedSalePrice: 149.9,
       }),
     );

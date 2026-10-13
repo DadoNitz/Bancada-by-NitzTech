@@ -81,6 +81,11 @@ export const STATUS_SELECIONAVEIS: UnitStatus[] = [
   "DISCARDED",
 ];
 
+/** Situações filtráveis no Estoque. Vendida tem aba própria (/estoque/vendas). */
+export const STATUS_DO_ESTOQUE: UnitStatus[] = STATUS_SELECIONAVEIS.filter(
+  (status) => status !== "SOLD",
+);
+
 export const CONDICOES_SELECIONAVEIS: UnitCondition[] = [
   "NEW",
   "LIKE_NEW",

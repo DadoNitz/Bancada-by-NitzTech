@@ -13,19 +13,37 @@ import type { CategoryDefinition } from "./types";
  * afirmaria incompatibilidade onde não há — ou pior, o contrário.
  */
 
+/**
+ * Inclui plataformas antigas e HEDT porque o estoque é de usado: X99 chinesa
+ * (LGA2011-3) e Xeon de servidor aparecem toda semana.
+ */
 export const SOCKETS = [
-  "AM4",
   "AM5",
+  "AM4",
   "AM3+",
+  "AM3",
+  "AM2+",
   "FM2+",
+  "FM2",
+  "FM1",
+  "TR4",
   "sTRX4",
-  "LGA1150",
-  "LGA1151",
-  "LGA1155",
-  "LGA1200",
-  "LGA1700",
   "LGA1851",
+  "LGA1700",
+  "LGA1200",
+  "LGA1151",
+  "LGA1150",
+  "LGA1155",
+  "LGA1156",
+  "LGA775",
+  "LGA1366",
+  "LGA2011",
+  "LGA2011-3",
+  "LGA2066",
 ] as const;
+
+const AJUDA_SOCKET =
+  "Precisa ser idêntico ao socket da placa-mãe. X99 = LGA2011-3, X79 = LGA2011, X299 = LGA2066.";
 
 export const TIPOS_MEMORIA = ["DDR3", "DDR4", "DDR5"] as const;
 
@@ -76,7 +94,7 @@ export const CATALOGO_PADRAO: readonly CategoryDefinition[] = [
         options: SOCKETS,
         required: true,
         usedInCompatibility: true,
-        helpText: "Precisa ser idêntico ao socket da placa-mãe.",
+        helpText: AJUDA_SOCKET,
       },
       { key: "cores", label: "Núcleos", type: "NUMBER", min: 1, max: 128 },
       { key: "threads", label: "Threads", type: "NUMBER", min: 1, max: 256 },
@@ -130,6 +148,7 @@ export const CATALOGO_PADRAO: readonly CategoryDefinition[] = [
         options: SOCKETS,
         required: true,
         usedInCompatibility: true,
+        helpText: AJUDA_SOCKET,
       },
       { key: "chipset", label: "Chipset", type: "STRING" },
       {

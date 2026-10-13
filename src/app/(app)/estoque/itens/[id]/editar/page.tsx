@@ -87,7 +87,11 @@ export default async function EditarUnidadePage({
           serialNumber: unidade.serialNumber ?? "",
           condition: unidade.condition,
           purchasedById: unidade.purchasedById ?? "",
-          purchaseCost: paraCampo(unidade.purchaseCost),
+          // O campo aceita valor ou anotação ("não lembro").
+          purchaseCost:
+            unidade.purchaseCost === null
+              ? (unidade.purchaseCostNote ?? "")
+              : paraCampo(unidade.purchaseCost),
           estimatedSalePrice: paraCampo(unidade.estimatedSalePrice),
           origin: unidade.origin ?? "",
           notes: unidade.notes ?? "",

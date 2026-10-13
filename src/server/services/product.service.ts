@@ -41,6 +41,7 @@ export interface DadosDasUnidades {
   locationId?: string | undefined;
   purchasedById?: string | undefined;
   purchaseCost?: number | undefined;
+  purchaseCostNote?: string | undefined;
   estimatedSalePrice?: number | undefined;
   purchaseDate?: Date | undefined;
   origin?: string | undefined;
@@ -150,6 +151,8 @@ export async function cadastrarPecaComUnidades(
           quantity: porQuantidade ? unidades.quantidade : 1,
           purchasedById: unidades.purchasedById ?? null,
           purchaseCost: unidades.purchaseCost ?? null,
+          purchaseCostNote:
+            unidades.purchaseCost == null ? (unidades.purchaseCostNote ?? null) : null,
           estimatedSalePrice:
             unidades.estimatedSalePrice ?? produto.defaultSalePrice ?? null,
           purchaseDate: unidades.purchaseDate ?? null,
@@ -247,6 +250,8 @@ export async function adicionarUnidades(
           quantity: porQuantidade ? unidades.quantidade : 1,
           purchasedById: unidades.purchasedById ?? null,
           purchaseCost: unidades.purchaseCost ?? null,
+          purchaseCostNote:
+            unidades.purchaseCost == null ? (unidades.purchaseCostNote ?? null) : null,
           estimatedSalePrice:
             unidades.estimatedSalePrice ??
             (produto.defaultSalePrice ? Number(produto.defaultSalePrice) : null),

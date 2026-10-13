@@ -28,6 +28,7 @@ describe("edição rápida preserva a ficha", () => {
     const dados = {
       condition: "LIKE_NEW" as const,
       purchaseCost: 0,
+      purchaseCostNote: null,
       estimatedSalePrice: null,
     };
     await atualizarResumoDaUnidade("peca", dados, ctx);
@@ -51,6 +52,7 @@ describe("edição rápida preserva a ficha", () => {
     const dados = {
       condition: "USED" as const,
       purchaseCost: null,
+      purchaseCostNote: "não lembro",
       estimatedSalePrice: 10,
     };
     vi.mocked(prisma.inventoryUnit.findUnique).mockResolvedValue({

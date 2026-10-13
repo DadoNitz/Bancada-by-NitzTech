@@ -32,6 +32,7 @@ export const NAVEGACAO: ItemDeNavegacao[] = [
     disponivel: true,
     filhos: [
       { titulo: "Todos os itens", href: "/estoque/itens", icone: "List", disponivel: true },
+      { titulo: "Vendas", href: "/estoque/vendas", icone: "ShoppingCart", disponivel: true },
       {
         titulo: "Adicionar peça",
         href: "/estoque/novo",

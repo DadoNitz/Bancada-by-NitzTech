@@ -1,5 +1,6 @@
 "use client";
 
+import { lerCusto } from "@/lib/custo";
 import { AlertTriangle, Check, Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -109,7 +110,17 @@ export function FormularioDeEdicao({
     if (!exigirConexao()) return;
 
     iniciar(async () => {
-      const resultado = await salvarUnidade({ id: dados.unitId, ...unidade });
+      const custo = lerCusto(unidade.purchaseCost);
+      if (!custo.ok) {
+        toast.error("Não foi possível salvar", { description: custo.erro });
+        return;
+      }
+      const resultado = await salvarUnidade({
+        id: dados.unitId,
+        ...unidade,
+        purchaseCost: custo.valor ?? undefined,
+        purchaseCostNote: custo.nota ?? undefined,
+      });
 
       if (!resultado.ok) {
         toast.error("Não foi possível salvar", { description: resultado.error });
@@ -239,7 +250,7 @@ export function FormularioDeEdicao({
             rotulo="Valor de compra"
             valor={unidade.purchaseCost}
             aoMudar={(v) => setUnidade((a) => ({ ...a, purchaseCost: v }))}
-            numerico
+            placeholder="0,00 ou não lembro"
           />
           <Campo
             id="ed-venda"
@@ -424,6 +435,7 @@ function Campo({
   numerico,
   mono,
   largura,
+  placeholder,
 }: {
   id: string;
   rotulo: string;
@@ -432,6 +444,7 @@ function Campo({
   numerico?: boolean;
   mono?: boolean;
   largura?: string;
+  placeholder?: string;
 }) {
   return (
     <div className={cn("space-y-1.5", largura)}>
@@ -441,6 +454,7 @@ function Campo({
         className={cn("h-11", mono && "font-mono")}
         value={valor}
         inputMode={numerico ? "decimal" : undefined}
+        placeholder={placeholder}
         onChange={(evento) => aoMudar(evento.target.value)}
       />
     </div>
