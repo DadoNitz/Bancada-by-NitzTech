@@ -754,6 +754,11 @@
   gap: 16px;
   flex-wrap: wrap;
 }
+.lp footer .maker strong {
+  color: var(--lp-ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
 
 @media (max-width: 900px) {
   .lp .hero .wrap {

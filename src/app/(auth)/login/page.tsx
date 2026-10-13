@@ -35,6 +35,9 @@ export default async function LoginPage() {
 
         <LoginForm />
       </div>
+      <p className="text-muted-foreground text-xs">
+        um produto <span className="text-foreground font-semibold">NitzTech</span>
+      </p>
     </main>
   );
 }
