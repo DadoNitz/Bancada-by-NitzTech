@@ -2,6 +2,7 @@
 
 import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -40,6 +41,8 @@ export function FotosDaPeca({
   const galeriaRef = useRef<HTMLInputElement>(null);
   const [fotos, setFotos] = useState<Foto[]>(iniciais);
   const [enviando, setEnviando] = useState(0);
+  const [excluindo, setExcluindo] = useState<Set<string>>(() => new Set());
+  const router = useRouter();
 
   async function enviar(arquivos: FileList) {
     setEnviando((atual) => atual + arquivos.length);
@@ -71,6 +74,44 @@ export function FotosDaPeca({
       } finally {
         setEnviando((atual) => atual - 1);
       }
+    }
+  }
+
+  /**
+   * Exclui no servidor, não só da tela. Antes o X apenas tirava a foto da
+   * lista local — ao recarregar a página, ela voltava.
+   */
+  async function excluir(foto: Foto) {
+    if (!window.confirm("Excluir esta foto? Não dá para desfazer.")) return;
+
+    setExcluindo((atual) => new Set(atual).add(foto.id));
+    try {
+      const resposta = await fetch("/api/upload", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageId: foto.id }),
+      });
+      const dados: { erro?: string } = await resposta
+        .json()
+        .catch(() => ({}));
+
+      if (!resposta.ok) {
+        toast.error("Não foi possível excluir", { description: dados.erro });
+        return;
+      }
+
+      setFotos((atual) => atual.filter((f) => f.id !== foto.id));
+      toast.success("Foto excluída");
+      // Atualiza a miniatura do cabeçalho, que vem do servidor.
+      router.refresh();
+    } catch {
+      toast.error("Falha ao excluir", { description: "Verifique a conexão." });
+    } finally {
+      setExcluindo((atual) => {
+        const proximo = new Set(atual);
+        proximo.delete(foto.id);
+        return proximo;
+      });
     }
   }
 
@@ -116,13 +157,18 @@ export function FotosDaPeca({
                 />
                 <button
                   type="button"
-                  aria-label="Remover foto da lista"
-                  onClick={() =>
-                    setFotos((atual) => atual.filter((f) => f.id !== foto.id))
-                  }
-                  className="bg-background/90 absolute top-1 right-1 rounded-full p-1"
+                  aria-label="Excluir foto"
+                  onClick={() => void excluir(foto)}
+                  disabled={excluindo.has(foto.id)}
+                  // Alvo de toque de 32px: o X de 12px antes era fácil de errar
+                  // no celular.
+                  className="bg-background/90 absolute top-1 right-1 flex size-8 items-center justify-center rounded-full disabled:opacity-60"
                 >
-                  <X className="size-3" aria-hidden />
+                  {excluindo.has(foto.id) ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  ) : (
+                    <X className="size-4" aria-hidden />
+                  )}
                 </button>
                 {foto.urlRecorte ? (
                   <span className="bg-background/90 absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px]">

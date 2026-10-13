@@ -9,7 +9,12 @@ import {
 } from "@/lib/images/process";
 import { storage } from "@/lib/storage";
 import { prisma } from "@/server/db/client";
-import { requirePermission } from "@/server/session";
+import { registrarAuditoria } from "@/server/services/audit.service";
+import {
+  NaoAutenticadoError,
+  requirePermission,
+  SemPermissaoError,
+} from "@/server/session";
 
 /**
  * Upload de foto de peca.
@@ -122,6 +127,136 @@ export async function POST(request: Request) {
     console.error("[api/upload]", erro);
     return NextResponse.json(
       { erro: "Nao foi possivel enviar a foto." },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * Exclui uma foto de unidade ou de produto.
+ *
+ * Ordem deliberada: primeiro o banco (numa transacao com a auditoria), depois
+ * os arquivos. Se apagar o arquivo falhar, sobra so um blob orfao, invisivel;
+ * o contrario deixaria uma linha no banco apontando para imagem inexistente,
+ * que aparece quebrada na tela.
+ *
+ * Se a foto removida era a principal, a proxima (pela ordem) assume — senao a
+ * peca ficaria sem miniatura na lista mesmo tendo outras fotos.
+ */
+export async function DELETE(request: Request) {
+  try {
+    const ctx = await requirePermission("inventory:write");
+
+    const corpo: unknown = await request.json().catch(() => null);
+    const imageId =
+      corpo && typeof corpo === "object" && "imageId" in corpo
+        ? (corpo as { imageId: unknown }).imageId
+        : null;
+
+    if (typeof imageId !== "string" || imageId.length === 0) {
+      return NextResponse.json(
+        { erro: "Informe o id da foto." },
+        { status: 400 },
+      );
+    }
+
+    const campos = {
+      id: true,
+      storageKey: true,
+      thumbnailKey: true,
+      cutoutKey: true,
+      fileName: true,
+      isPrimary: true,
+    } as const;
+
+    const daUnidade = await prisma.unitImage.findUnique({
+      where: { id: imageId },
+      select: { ...campos, unitId: true },
+    });
+    const doProduto = daUnidade
+      ? null
+      : await prisma.productImage.findUnique({
+          where: { id: imageId },
+          select: { ...campos, productId: true },
+        });
+
+    const foto = daUnidade ?? doProduto;
+    if (!foto) {
+      // Ja nao existe: para quem pediu a exclusao, e o estado desejado.
+      return NextResponse.json({ ok: true });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (daUnidade) {
+        await tx.unitImage.delete({ where: { id: imageId } });
+        if (daUnidade.isPrimary) {
+          const proxima = await tx.unitImage.findFirst({
+            where: { unitId: daUnidade.unitId },
+            orderBy: { sortOrder: "asc" },
+            select: { id: true },
+          });
+          if (proxima) {
+            await tx.unitImage.update({
+              where: { id: proxima.id },
+              data: { isPrimary: true },
+            });
+          }
+        }
+      } else if (doProduto) {
+        await tx.productImage.delete({ where: { id: imageId } });
+        if (doProduto.isPrimary) {
+          const proxima = await tx.productImage.findFirst({
+            where: { productId: doProduto.productId },
+            orderBy: { sortOrder: "asc" },
+            select: { id: true },
+          });
+          if (proxima) {
+            await tx.productImage.update({
+              where: { id: proxima.id },
+              data: { isPrimary: true },
+            });
+          }
+        }
+      }
+
+      await registrarAuditoria(
+        {
+          action: "delete",
+          entity: daUnidade ? "UnitImage" : "ProductImage",
+          entityId: imageId,
+          before: {
+            fileName: foto.fileName,
+            storageKey: foto.storageKey,
+            isPrimary: foto.isPrimary,
+            ...(daUnidade
+              ? { unitId: daUnidade.unitId }
+              : { productId: doProduto!.productId }),
+          },
+        },
+        ctx,
+        tx,
+      );
+    });
+
+    const driver = storage();
+    await Promise.all(
+      [foto.storageKey, foto.thumbnailKey, foto.cutoutKey]
+        .filter((chave): chave is string => Boolean(chave))
+        .map((chave) => driver.remove(chave)),
+    );
+
+    return NextResponse.json({ ok: true });
+  } catch (erro) {
+    if (erro instanceof NaoAutenticadoError) {
+      return NextResponse.json({ erro: erro.message }, { status: 401 });
+    }
+    if (erro instanceof SemPermissaoError) {
+      return NextResponse.json({ erro: erro.message }, { status: 403 });
+    }
+
+    console.error("[api/upload DELETE]", erro);
+    return NextResponse.json(
+      { erro: "Nao foi possivel excluir a foto." },
       { status: 500 },
     );
   }

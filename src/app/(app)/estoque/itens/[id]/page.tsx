@@ -474,6 +474,9 @@ export default async function UnidadePage({
             iniciais={unidade.images.map((imagem) => ({
               id: imagem.id,
               url: `/api/imagens/${imagem.thumbnailKey ?? imagem.storageKey}`,
+              urlRecorte: imagem.cutoutKey
+                ? `/api/imagens/${imagem.cutoutKey}`
+                : undefined,
             }))}
           />
         </section>
