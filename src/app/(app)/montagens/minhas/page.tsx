@@ -60,54 +60,62 @@ export default async function MinhasMontagensPage() {
 
             return (
               <li key={montagem.id} className="bg-card rounded-lg border p-4">
+                {/*
+                  Duas colunas fixas: conteúdo (1fr) + seta (auto). Dentro do
+                  conteúdo, título e preço empilham no celular e só ficam lado
+                  a lado a partir de `sm` — no mobile não há largura para os
+                  dois sem espremer o nome.
+                */}
                 <Link
                   href={`/montagens/minhas/${montagem.id}`}
-                  className="hover:bg-muted/50 -m-2 flex flex-wrap items-start justify-between gap-3 rounded-md p-2 transition-colors"
+                  className="hover:bg-muted/50 -m-2 grid grid-cols-[1fr_auto] items-center gap-2 rounded-md p-2 transition-colors"
                   aria-label={`Ver e editar ${montagem.name}`}
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-medium">{montagem.name}</h2>
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-0.5 text-xs font-medium",
-                          COR_STATUS[montagem.status],
-                        )}
-                      >
-                        {ROTULO_STATUS[montagem.status]}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                      {montagem._count.items} peças ·{" "}
-                      {formatarData(montagem.createdAt)}
-                      {montagem.customerName ? ` · ${montagem.customerName}` : ""}
-                      {montagem.createdBy ? ` · por ${montagem.createdBy.name}` : ""}
-                    </p>
-                  </div>
-
-                  <div className="text-right">
-                    <p className="text-muted-foreground text-xs">
-                      custo {formatarMoeda(custo)}
-                    </p>
-                    {venda !== null ? (
-                      <p className="text-sm font-medium tabular-nums">
-                        {formatarMoeda(venda)}
-                        {margem !== null ? (
-                          <span
-                            className={cn(
-                              "ml-2 text-xs",
-                              margem >= 0 ? "text-emerald-600" : "text-red-600",
-                            )}
-                          >
-                            {margem >= 0 ? "+" : ""}
-                            {formatarMoeda(margem)}
-                          </span>
-                        ) : null}
+                  <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-medium text-balance">{montagem.name}</h2>
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-xs font-medium",
+                            COR_STATUS[montagem.status],
+                          )}
+                        >
+                          {ROTULO_STATUS[montagem.status]}
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground mt-1 text-sm">
+                        {montagem._count.items} peças ·{" "}
+                        {formatarData(montagem.createdAt)}
+                        {montagem.customerName ? ` · ${montagem.customerName}` : ""}
+                        {montagem.createdBy ? ` · por ${montagem.createdBy.name}` : ""}
                       </p>
-                    ) : null}
+                    </div>
+
+                    <div className="shrink-0 sm:text-right">
+                      <p className="text-muted-foreground text-xs">
+                        custo {formatarMoeda(custo)}
+                      </p>
+                      {venda !== null ? (
+                        <p className="text-sm font-medium tabular-nums">
+                          {formatarMoeda(venda)}
+                          {margem !== null ? (
+                            <span
+                              className={cn(
+                                "ml-2 text-xs",
+                                margem >= 0 ? "text-emerald-600" : "text-red-600",
+                              )}
+                            >
+                              {margem >= 0 ? "+" : ""}
+                              {formatarMoeda(margem)}
+                            </span>
+                          ) : null}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                   <ChevronRight
-                    className="text-muted-foreground mt-0.5 size-5 shrink-0"
+                    className="text-muted-foreground size-5 shrink-0"
                     aria-hidden
                   />
                 </Link>
