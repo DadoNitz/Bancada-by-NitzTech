@@ -4,9 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import {
+  adicionarPecaNaMontagem,
   alterarStatusDaMontagem,
+  atualizarMontagem,
   cancelarMontagem,
   criarMontagem,
+  removerPecaDaMontagem,
   venderMontagem,
 } from "@/server/services/build-write.service";
 
@@ -76,7 +79,7 @@ export async function salvarMontagem(
   );
 
   if (resultado.ok) {
-    revalidatePath("/montagens");
+    revalidatePath("/montagens", "layout");
     revalidatePath("/estoque/itens");
     revalidatePath("/dashboard");
   }
@@ -99,7 +102,7 @@ export async function cancelar(
   );
 
   if (resultado.ok) {
-    revalidatePath("/montagens");
+    revalidatePath("/montagens", "layout");
     revalidatePath("/estoque/itens");
     revalidatePath("/dashboard");
   }
@@ -131,7 +134,7 @@ export async function vender(
   );
 
   if (resultado.ok) {
-    revalidatePath("/montagens");
+    revalidatePath("/montagens", "layout");
     revalidatePath("/socios");
     revalidatePath("/dashboard");
   }
@@ -154,6 +157,85 @@ export async function mudarStatus(input: unknown): Promise<ActionResult<null>> {
     input,
   );
 
-  if (resultado.ok) revalidatePath("/montagens");
+  if (resultado.ok) revalidatePath("/montagens", "layout");
+  return resultado;
+}
+
+/** Texto opcional: string vazia vira `null`, para o campo poder ser apagado. */
+const textoOpcional = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((valor) => (valor === "" ? null : valor))
+    .nullable()
+    .optional();
+
+const editarSchema = z.object({
+  buildId: z.string().min(1),
+  name: z.string().trim().min(2, "De um nome a montagem.").max(120),
+  customerName: textoOpcional(120),
+  // Preço vazio = sem preço definido (null), diferente de "não mexer".
+  salePrice: dinheiro.transform((valor) => valor ?? null),
+  useCase: textoOpcional(80),
+  tier: textoOpcional(40),
+  notes: textoOpcional(2000),
+});
+
+function revalidarMontagem() {
+  // "layout" invalida a lista e a página de detalhe de uma vez.
+  revalidatePath("/montagens", "layout");
+  revalidatePath("/estoque/itens");
+  revalidatePath("/dashboard");
+}
+
+export async function editarMontagem(input: unknown): Promise<ActionResult<null>> {
+  const resultado = await runAction(
+    {
+      permission: "build:write",
+      schema: editarSchema,
+      async handler({ buildId, ...dados }, ctx) {
+        await atualizarMontagem(buildId, dados, ctx);
+        return null;
+      },
+    },
+    input,
+  );
+  if (resultado.ok) revalidarMontagem();
+  return resultado;
+}
+
+const pecaSchema = z.object({
+  buildId: z.string().min(1),
+  unitId: z.string().min(1),
+});
+
+export async function adicionarPeca(
+  input: unknown,
+): Promise<ActionResult<{ custoTotal: number }>> {
+  const resultado = await runAction(
+    {
+      permission: "build:write",
+      schema: pecaSchema,
+      handler: (dados, ctx) => adicionarPecaNaMontagem(dados.buildId, dados.unitId, ctx),
+    },
+    input,
+  );
+  if (resultado.ok) revalidarMontagem();
+  return resultado;
+}
+
+export async function removerPeca(
+  input: unknown,
+): Promise<ActionResult<{ custoTotal: number }>> {
+  const resultado = await runAction(
+    {
+      permission: "build:write",
+      schema: pecaSchema,
+      handler: (dados, ctx) => removerPecaDaMontagem(dados.buildId, dados.unitId, ctx),
+    },
+    input,
+  );
+  if (resultado.ok) revalidarMontagem();
   return resultado;
 }

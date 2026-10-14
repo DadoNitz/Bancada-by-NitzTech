@@ -2,13 +2,17 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db/client";
 import {
+  adicionarPecaNaMontagem,
+  atualizarMontagem,
   cancelarMontagem,
   criarMontagem,
+  removerPecaDaMontagem,
   venderMontagem,
 } from "@/server/services/build-write.service";
 import {
   ConflitoError,
   EstoqueInvalidoError,
+  RegraDeNegocioError,
 } from "@/server/services/errors";
 import { registrarMovimento } from "@/server/services/movement.service";
 import { cadastrarPecaComUnidades } from "@/server/services/product.service";
@@ -383,5 +387,105 @@ describe("vender montagem", () => {
     expect(vendas.every((venda) => venda.partnerId === partnerId)).toBe(true);
     const total = vendas.reduce((soma, v) => soma + Number(v.amount), 0);
     expect(total).toBeCloseTo(1000, 2);
+  });
+});
+
+describe("editar montagem", () => {
+  it("adicionar peça reserva a unidade e recalcula o custo", async () => {
+    const [a, b] = await criarPecas(2, 100);
+    const [extra] = await criarPecas(1, 250);
+    const { buildId } = await criarMontagem(
+      { name: `${MARCADOR} editar add`, unitIds: [a!, b!] },
+      ctx,
+    );
+
+    const { custoTotal } = await adicionarPecaNaMontagem(buildId, extra!, ctx);
+
+    expect(custoTotal).toBe(450);
+    expect((await statusDe(extra!)).status).toBe("IN_BUILD");
+    const mov = await prisma.inventoryMovement.findFirst({
+      where: { unitId: extra!, buildId, type: "BUILD_ALLOCATE" },
+    });
+    expect(mov).not.toBeNull();
+  });
+
+  it("remover peça devolve ao estoque e recalcula o custo", async () => {
+    const [a, b] = await criarPecas(2, 100);
+    const { buildId } = await criarMontagem(
+      { name: `${MARCADOR} editar remove`, unitIds: [a!, b!] },
+      ctx,
+    );
+
+    const { custoTotal } = await removerPecaDaMontagem(buildId, b!, ctx);
+
+    expect(custoTotal).toBe(100);
+    expect((await statusDe(b!)).status).toBe("AVAILABLE");
+    const restantes = await prisma.buildItem.count({ where: { buildId } });
+    expect(restantes).toBe(1);
+  });
+
+  it("não remove a última peça — para isso existe cancelar", async () => {
+    const [a] = await criarPecas(1);
+    const { buildId } = await criarMontagem(
+      { name: `${MARCADOR} editar ultima`, unitIds: [a!] },
+      ctx,
+    );
+
+    await expect(removerPecaDaMontagem(buildId, a!, ctx)).rejects.toBeInstanceOf(
+      RegraDeNegocioError,
+    );
+    expect((await statusDe(a!)).status).toBe("IN_BUILD");
+  });
+
+  it("não adiciona peça que já está em outra montagem", async () => {
+    const [a, b] = await criarPecas(2);
+    const { buildId } = await criarMontagem(
+      { name: `${MARCADOR} editar ocupada 1`, unitIds: [a!] },
+      ctx,
+    );
+    await criarMontagem({ name: `${MARCADOR} editar ocupada 2`, unitIds: [b!] }, ctx);
+
+    await expect(adicionarPecaNaMontagem(buildId, b!, ctx)).rejects.toBeInstanceOf(
+      EstoqueInvalidoError,
+    );
+  });
+
+  it("atualiza dados e permite limpar o preço", async () => {
+    const [a] = await criarPecas(1);
+    const { buildId } = await criarMontagem(
+      { name: `${MARCADOR} editar dados`, unitIds: [a!], salePrice: 900 },
+      ctx,
+    );
+
+    await atualizarMontagem(
+      buildId,
+      { name: `${MARCADOR} editar dados v2`, customerName: "João", salePrice: null },
+      ctx,
+    );
+
+    const build = await prisma.build.findUniqueOrThrow({ where: { id: buildId } });
+    expect(build.name).toContain("v2");
+    expect(build.customerName).toBe("João");
+    expect(build.salePrice).toBeNull();
+  });
+
+  it("montagem vendida não pode mais ser editada", async () => {
+    const [a, b] = await criarPecas(2);
+    const [extra] = await criarPecas(1);
+    const { buildId } = await criarMontagem(
+      { name: `${MARCADOR} editar vendida`, unitIds: [a!, b!] },
+      ctx,
+    );
+    await venderMontagem({ buildId, salePrice: 500 }, ctx);
+
+    await expect(adicionarPecaNaMontagem(buildId, extra!, ctx)).rejects.toBeInstanceOf(
+      EstoqueInvalidoError,
+    );
+    await expect(removerPecaDaMontagem(buildId, a!, ctx)).rejects.toBeInstanceOf(
+      EstoqueInvalidoError,
+    );
+    await expect(
+      atualizarMontagem(buildId, { name: `${MARCADOR} x` }, ctx),
+    ).rejects.toBeInstanceOf(EstoqueInvalidoError);
   });
 });

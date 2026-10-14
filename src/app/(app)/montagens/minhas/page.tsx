@@ -1,8 +1,7 @@
-import { Cpu } from "lucide-react";
+import { ChevronRight, Cpu } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import type { BuildStatus } from "@/generated/prisma/enums";
 import { formatarData, formatarMoeda, paraNumero } from "@/lib/format";
 import { iaDisponivel } from "@/lib/ai";
 import { can } from "@/lib/auth/permissions";
@@ -13,32 +12,10 @@ import { cn } from "@/lib/utils";
 import { GerarAnuncio } from "@/components/inventory/gerar-anuncio";
 
 import { CancelarMontagem, VenderMontagem } from "./acoes";
+import { COR_STATUS, ROTULO_STATUS, SEGURA_PECAS } from "./status";
 
 export const metadata: Metadata = { title: "Minhas montagens" };
 export const dynamic = "force-dynamic";
-
-const ROTULO_STATUS: Record<BuildStatus, string> = {
-  PLANNED: "Planejada",
-  RESERVED: "Peças reservadas",
-  ASSEMBLING: "Em montagem",
-  ASSEMBLED: "Montada",
-  SOLD: "Vendida",
-  CANCELLED: "Cancelada",
-};
-
-const COR_STATUS: Record<BuildStatus, string> = {
-  PLANNED: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  RESERVED: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  ASSEMBLING: "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
-  ASSEMBLED:
-    "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  SOLD: "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-  CANCELLED:
-    "bg-neutral-100 text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400",
-};
-
-/** Status em que a montagem ainda segura peças do estoque. */
-const SEGURA_PECAS: BuildStatus[] = ["PLANNED", "RESERVED", "ASSEMBLING", "ASSEMBLED"];
 
 export default async function MinhasMontagensPage() {
   const [montagens, ctx] = await Promise.all([
@@ -83,8 +60,12 @@ export default async function MinhasMontagensPage() {
 
             return (
               <li key={montagem.id} className="bg-card rounded-lg border p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
+                <Link
+                  href={`/montagens/minhas/${montagem.id}`}
+                  className="hover:bg-muted/50 -m-2 flex flex-wrap items-start justify-between gap-3 rounded-md p-2 transition-colors"
+                  aria-label={`Ver e editar ${montagem.name}`}
+                >
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-medium">{montagem.name}</h2>
                       <span
@@ -125,7 +106,11 @@ export default async function MinhasMontagensPage() {
                       </p>
                     ) : null}
                   </div>
-                </div>
+                  <ChevronRight
+                    className="text-muted-foreground mt-0.5 size-5 shrink-0"
+                    aria-hidden
+                  />
+                </Link>
 
                 {SEGURA_PECAS.includes(montagem.status) ? (
                   <div className="mt-3 flex flex-wrap gap-2">

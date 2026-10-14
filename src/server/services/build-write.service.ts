@@ -487,20 +487,282 @@ export async function buscarMontagem(id: string) {
               condition: true,
               purchaseCost: true,
               estimatedSalePrice: true,
+              location: { select: { name: true } },
               product: {
                 select: {
                   name: true,
+                  specs: true,
                   brand: { select: { name: true } },
-                  category: { select: { name: true, icon: true } },
+                  category: { select: { name: true, icon: true, slug: true } },
                 },
               },
             },
           },
         },
+        orderBy: { createdAt: "asc" },
       },
     },
   });
 
   if (!build) throw new NaoEncontradoError("Montagem");
   return build;
+}
+
+/** Status em que a montagem ainda segura peças — e, portanto, pode ser editada. */
+const EDITAVEL: BuildStatus[] = ["PLANNED", "RESERVED", "ASSEMBLING", "ASSEMBLED"];
+
+function exigirEditavel(status: BuildStatus) {
+  if (!EDITAVEL.includes(status)) {
+    throw new EstoqueInvalidoError(
+      status === "SOLD"
+        ? "Montagem vendida não pode mais ser alterada."
+        : "Montagem cancelada não pode mais ser alterada.",
+    );
+  }
+}
+
+/** Recalcula o custo a partir das peças que estão de fato na montagem. */
+async function recalcularCusto(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  buildId: string,
+): Promise<number> {
+  const itens = await tx.buildItem.findMany({
+    where: { buildId },
+    select: { unit: { select: { purchaseCost: true } } },
+  });
+  const custo = itens.reduce(
+    (soma, item) => soma + Number(item.unit.purchaseCost ?? 0),
+    0,
+  );
+  await tx.build.update({ where: { id: buildId }, data: { totalCost: custo } });
+  return custo;
+}
+
+export interface AtualizarMontagemInput {
+  name: string;
+  customerName?: string | null | undefined;
+  salePrice?: number | null | undefined;
+  useCase?: string | null | undefined;
+  tier?: string | null | undefined;
+  notes?: string | null | undefined;
+}
+
+/**
+ * Edita os dados descritivos da montagem (nome, cliente, preço, observações).
+ *
+ * Não toca nas peças nem no status: essas mudanças têm efeito no estoque e
+ * passam pelos caminhos próprios, que geram movimentação.
+ */
+export async function atualizarMontagem(
+  buildId: string,
+  input: AtualizarMontagemInput,
+  ctx: ActionContext,
+): Promise<void> {
+  const build = await prisma.build.findUnique({
+    where: { id: buildId },
+    select: {
+      status: true,
+      name: true,
+      customerName: true,
+      salePrice: true,
+      useCase: true,
+      tier: true,
+      notes: true,
+    },
+  });
+  if (!build) throw new NaoEncontradoError("Montagem");
+  exigirEditavel(build.status);
+
+  const depois = {
+    name: input.name,
+    customerName: input.customerName ?? null,
+    salePrice: input.salePrice ?? null,
+    useCase: input.useCase ?? null,
+    tier: input.tier ?? null,
+    notes: input.notes ?? null,
+  };
+
+  await prisma.build.update({ where: { id: buildId }, data: depois });
+
+  await registrarAuditoria(
+    {
+      action: "update",
+      entity: "Build",
+      entityId: buildId,
+      before: { ...build, salePrice: build.salePrice ? Number(build.salePrice) : null },
+      after: depois,
+    },
+    ctx,
+  );
+}
+
+/**
+ * Coloca mais uma peça na montagem (ou a peça nova de uma troca).
+ *
+ * Mesmo caminho da criação: compare-and-swap no status da unidade e
+ * movimentação `BUILD_ALLOCATE`. O custo é recalculado a partir das peças.
+ */
+export async function adicionarPecaNaMontagem(
+  buildId: string,
+  unitId: string,
+  ctx: ActionContext,
+): Promise<{ custoTotal: number }> {
+  return prisma.$transaction(async (tx) => {
+    const build = await tx.build.findUnique({
+      where: { id: buildId },
+      select: { id: true, name: true, status: true },
+    });
+    if (!build) throw new NaoEncontradoError("Montagem");
+    exigirEditavel(build.status);
+
+    const unidade = await tx.inventoryUnit.findUnique({
+      where: { id: unitId },
+      select: {
+        id: true,
+        status: true,
+        productId: true,
+        locationId: true,
+        internalCode: true,
+        deletedAt: true,
+        product: { select: { name: true, category: { select: { slug: true } } } },
+      },
+    });
+    if (!unidade || unidade.deletedAt) throw new NaoEncontradoError("Peça");
+
+    if (unidade.status !== "AVAILABLE" && unidade.status !== "RESERVED") {
+      throw new EstoqueInvalidoError(
+        `${unidade.product.name} (${unidade.internalCode}) não está disponível.`,
+      );
+    }
+
+    const atualizadas = await tx.inventoryUnit.updateMany({
+      where: { id: unidade.id, status: unidade.status },
+      data: { status: "IN_BUILD" },
+    });
+    if (atualizadas.count !== 1) {
+      throw new ConflitoError(
+        `A peça ${unidade.product.name} foi alocada por outra operação. Recarregue e tente de novo.`,
+      );
+    }
+
+    await tx.buildItem.create({
+      data: {
+        buildId,
+        unitId: unidade.id,
+        role: papelDaCategoria(unidade.product.category.slug),
+        quantity: 1,
+      },
+    });
+
+    await tx.inventoryMovement.create({
+      data: {
+        unitId: unidade.id,
+        productId: unidade.productId,
+        type: "BUILD_ALLOCATE",
+        quantity: 1,
+        fromStatus: unidade.status,
+        toStatus: "IN_BUILD",
+        fromLocationId: unidade.locationId,
+        toLocationId: unidade.locationId,
+        userId: ctx.userId,
+        buildId,
+        reason: `Adicionada à montagem: ${build.name}`,
+      },
+    });
+
+    const custoTotal = await recalcularCusto(tx, buildId);
+
+    await registrarAuditoria(
+      {
+        action: "update",
+        entity: "Build",
+        entityId: buildId,
+        after: { pecaAdicionada: unidade.internalCode, custoTotal },
+      },
+      ctx,
+      tx,
+    );
+
+    return { custoTotal };
+  });
+}
+
+/**
+ * Tira uma peça da montagem e a devolve ao estoque disponível.
+ *
+ * A última peça não sai: montagem vazia não descreve PC nenhum — para isso
+ * existe "cancelar", que devolve tudo e registra o motivo.
+ */
+export async function removerPecaDaMontagem(
+  buildId: string,
+  unitId: string,
+  ctx: ActionContext,
+): Promise<{ custoTotal: number }> {
+  return prisma.$transaction(async (tx) => {
+    const build = await tx.build.findUnique({
+      where: { id: buildId },
+      select: { id: true, name: true, status: true, _count: { select: { items: true } } },
+    });
+    if (!build) throw new NaoEncontradoError("Montagem");
+    exigirEditavel(build.status);
+
+    const item = await tx.buildItem.findUnique({
+      where: { buildId_unitId: { buildId, unitId } },
+      select: {
+        id: true,
+        unit: {
+          select: { status: true, productId: true, locationId: true, internalCode: true },
+        },
+      },
+    });
+    if (!item) throw new NaoEncontradoError("Peça na montagem");
+
+    if (build._count.items <= 1) {
+      throw new RegraDeNegocioError(
+        "Esta é a última peça. Para desfazer a montagem inteira, use Cancelar.",
+      );
+    }
+
+    await tx.buildItem.delete({ where: { id: item.id } });
+
+    // Só volta ao estoque o que ainda está preso nesta montagem. Se a peça
+    // saiu por outro caminho, o status atual dela é a verdade.
+    if (item.unit.status === "IN_BUILD") {
+      await tx.inventoryUnit.updateMany({
+        where: { id: unitId, status: "IN_BUILD" },
+        data: { status: "AVAILABLE" },
+      });
+
+      await tx.inventoryMovement.create({
+        data: {
+          unitId,
+          productId: item.unit.productId,
+          type: "BUILD_RELEASE",
+          quantity: 1,
+          fromStatus: "IN_BUILD",
+          toStatus: "AVAILABLE",
+          fromLocationId: item.unit.locationId,
+          toLocationId: item.unit.locationId,
+          userId: ctx.userId,
+          buildId,
+          reason: `Removida da montagem: ${build.name}`,
+        },
+      });
+    }
+
+    const custoTotal = await recalcularCusto(tx, buildId);
+
+    await registrarAuditoria(
+      {
+        action: "update",
+        entity: "Build",
+        entityId: buildId,
+        after: { pecaRemovida: item.unit.internalCode, custoTotal },
+      },
+      ctx,
+      tx,
+    );
+
+    return { custoTotal };
+  });
 }
